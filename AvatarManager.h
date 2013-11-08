@@ -21,6 +21,11 @@ typedef NSImage DCImage;
 #endif
 
 /**
+ This is how long a cache image should exist on disk. Default is 24 hours.
+ */
+@property(nonatomic,assign)NSInteger maxCacheAge;
+
+/**
  Returns the AvatarManger singleton.
  This is what you will use to interaction with avatarManager.
  @return AvatarManager singleton.

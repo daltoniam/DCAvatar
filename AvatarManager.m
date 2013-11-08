@@ -42,9 +42,6 @@ typedef void (^DCAvatarFinished)(void);
 //block mappings on failure
 @property(nonatomic,strong)NSMutableDictionary *failureBlocks;
 
-//max cache time
-@property(nonatomic,assign)NSInteger maxCacheAge;
-
 
 @end
 
@@ -158,7 +155,7 @@ typedef void (^DCAvatarFinished)(void);
                 return;
             }
         }
-        NSError *error = [self errorWithDetail:NSLocalizedString(@"No avatar was found in the domain's meta data.", Nil) code:DCAvatarErrorCodeNoMeta];
+        NSError *error = [self errorWithDetail:NSLocalizedString(@"No avatar was found in the domain's meta data.", nil) code:DCAvatarErrorCodeNoMeta];
         [self processFailure:error hash:hash];
     }
     else
@@ -241,7 +238,7 @@ typedef void (^DCAvatarFinished)(void);
 {
     self.lastDiskCheck = [NSDate date];
     [self.optQueue addOperationWithBlock:^(void){
-        //do the disk cleaning
+        
         NSFileManager *manager = [NSFileManager defaultManager];
         NSURL *diskCacheURL = [NSURL fileURLWithPath:[[self class] cacheDirectory] isDirectory:YES];
         NSArray *resourceKeys = @[ NSURLIsDirectoryKey, NSURLContentModificationDateKey, NSURLTotalFileAllocatedSizeKey ];
@@ -263,10 +260,7 @@ typedef void (^DCAvatarFinished)(void);
             
             NSDate *modifyDate = resourceValues[NSURLContentModificationDateKey];
             if ([[modifyDate laterDate:expirationDate] isEqualToDate:expirationDate])
-            {
                 [manager removeItemAtURL:fileURL error:NULL];
-                continue;
-            }
         }
     }];
 }
