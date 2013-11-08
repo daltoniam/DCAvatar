@@ -14,7 +14,7 @@ typedef NS_ENUM(NSInteger, DCAvatarErrorCode) {
 
 @interface AvatarManager : NSObject
 
-#ifdef TARGET_OS_IPHONE
+#if TARGET_OS_IPHONE
 typedef UIImage DCImage;
 #else
 typedef NSImage DCImage;
