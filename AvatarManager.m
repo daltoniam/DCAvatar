@@ -10,11 +10,17 @@
 #import "AvatarRequest.h"
 #import <CommonCrypto/CommonHMAC.h>
 
+static const NSInteger kDefaultCacheMaxCacheAge = 60 * 60 * 24; // 24 hours
+
+static const NSInteger LastDiskCheckTime = 60 * 10; //10 minutes
+
 static NSString * const kDCAvatarLockName = @"com.basementkrew.networking.operation.lock";
 
 typedef void (^DCAvatarSuccess)(DCImage *image);
 
 typedef void (^DCAvatarFailure)(NSError *error);
+
+typedef void (^DCAvatarFinished)(void);
 
 @interface AvatarManager ()
 
@@ -36,6 +42,9 @@ typedef void (^DCAvatarFailure)(NSError *error);
 //block mappings on failure
 @property(nonatomic,strong)NSMutableDictionary *failureBlocks;
 
+//max cache time
+@property(nonatomic,assign)NSInteger maxCacheAge;
+
 
 @end
 
@@ -56,6 +65,7 @@ typedef void (^DCAvatarFailure)(NSError *error);
 {
     if(self = [super init])
     {
+        self.maxCacheAge = kDefaultCacheMaxCacheAge;
         self.optQueue = [[NSOperationQueue alloc] init];
         self.optQueue.maxConcurrentOperationCount = 6;
         self.lock = [[NSRecursiveLock alloc] init];
@@ -83,30 +93,31 @@ typedef void (^DCAvatarFailure)(NSError *error);
         success(image);
         return;
     }
-    [self addReturnBlock:success failure:failure forHash:hash];
-    //check if same request is already running...
+    if([self addReturnBlock:success failure:failure forHash:hash])
+        return;
     
-    //do disk cache check
-    
-    //do http request
-    NSString *url = value;
-    if(isEmail(value))
-        url = [self gravatarString:value];
-    
-    AvatarRequest *request = [AvatarRequest requestWithURL:url success:^(AvatarRequest *request){
-        [self processImageData:request.responseData hash:hash];
-    }failure:^(AvatarRequest *request,NSError *error){
-        [self processFailure:error hash:hash];
+    [self imageFromDisk:hash success:success failure:^{
+        
+        NSString *url = value;
+        if(isEmail(value))
+            url = [self gravatarString:value];
+        
+        AvatarRequest *request = [AvatarRequest requestWithURL:url success:^(AvatarRequest *request){
+            [self processImageData:request.responseData hash:hash];
+        }failure:^(AvatarRequest *request,NSError *error){
+            [self processFailure:error hash:hash];
+        }];
+        [self.optQueue addOperation:request];
     }];
-    [self.optQueue addOperation:request];
-    
-    //do disk cleaning
-    if(self.optQueue.operations.count == 0)
-    {
-        if(!self.lastDiskCheck || [self.lastDiskCheck timeIntervalSinceNow] > 5*60)
-            [self cleanDisk];
-    }
 }
+////////////////////////////////////////////////////////////////////////////////////////////////////
+-(void)cancelAvatar:(NSString*)value
+{
+    if(value)
+        [self removeBlocksForHash:[self hashValue:value]];
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+//private methods
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(void)processImageData:(NSData*)data hash:(NSString*)hash
 {
@@ -158,6 +169,14 @@ typedef void (^DCAvatarFailure)(NSError *error);
             success(image);
         [self.cachedImages setObject:image forKey:hash];
         [self removeBlocksForHash:hash];
+        [self saveImageToDisk:hash data:data finished:^{
+            
+            if(self.optQueue.operations.count <= 1)
+            {
+                if(!self.lastDiskCheck || [self.lastDiskCheck timeIntervalSinceNow] > LastDiskCheckTime)
+                    [self cleanDisk];
+            }
+        }];
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -168,21 +187,26 @@ typedef void (^DCAvatarFailure)(NSError *error);
         failure(error);
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
--(void)addReturnBlock:(DCAvatarSuccess)success failure:(DCAvatarFailure)failure forHash:(NSString*)hash
+-(BOOL)addReturnBlock:(DCAvatarSuccess)success failure:(DCAvatarFailure)failure forHash:(NSString*)hash
 {
     [self.lock lock];
     NSMutableArray *successArray = self.successBlocks[hash];
     NSMutableArray *failureArray = self.failureBlocks[hash];
+    BOOL running = YES;
     if(!successArray)
     {
         successArray = [NSMutableArray new];
         self.successBlocks[hash] = successArray;
         failureArray = [NSMutableArray new];
         self.failureBlocks[hash] = failureArray;
+        running = NO;
     }
-    [successArray addObject:success];
-    [failureArray addObject:failure];
+    if(success)
+        [successArray addObject:success];
+    if(failure)
+        [failureArray addObject:failure];
     [self.lock unlock];
+    return running;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(NSArray*)successBlocksForHash:(NSString*)hash
@@ -217,13 +241,97 @@ typedef void (^DCAvatarFailure)(NSError *error);
 {
     self.lastDiskCheck = [NSDate date];
     [self.optQueue addOperationWithBlock:^(void){
-       //do the disk cleaning
+        //do the disk cleaning
+        NSFileManager *manager = [NSFileManager defaultManager];
+        NSURL *diskCacheURL = [NSURL fileURLWithPath:[[self class] cacheDirectory] isDirectory:YES];
+        NSArray *resourceKeys = @[ NSURLIsDirectoryKey, NSURLContentModificationDateKey, NSURLTotalFileAllocatedSizeKey ];
+        
+        // This enumerator prefetches useful properties for our cache files.
+        NSDirectoryEnumerator *fileEnumerator = [manager enumeratorAtURL:diskCacheURL
+                                              includingPropertiesForKeys:resourceKeys
+                                                                 options:NSDirectoryEnumerationSkipsHiddenFiles
+                                                            errorHandler:NULL];
+        
+        NSDate *expirationDate = [NSDate dateWithTimeIntervalSinceNow:-self.maxCacheAge];
+        for (NSURL *fileURL in fileEnumerator)
+        {
+            NSDictionary *resourceValues = [fileURL resourceValuesForKeys:resourceKeys error:NULL];
+            
+            // Skip directories.
+            if ([resourceValues[NSURLIsDirectoryKey] boolValue])
+                continue;
+            
+            NSDate *modifyDate = resourceValues[NSURLContentModificationDateKey];
+            if ([[modifyDate laterDate:expirationDate] isEqualToDate:expirationDate])
+            {
+                [manager removeItemAtURL:fileURL error:NULL];
+                continue;
+            }
+        }
     }];
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(void)clearMemCache
 {
     [self.cachedImages removeAllObjects];
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+-(void)imageFromDisk:(NSString*)hash success:(DCAvatarSuccess)success failure:(DCAvatarFinished)failure
+{
+    [self.optQueue addOperationWithBlock:^(void){
+        NSString *cachePath = [[[self class] cacheDirectory] stringByAppendingFormat:@"/%@",hash];
+        NSDate *expirationDate = [NSDate dateWithTimeIntervalSinceNow:-self.maxCacheAge];
+        NSFileManager *manager = [NSFileManager defaultManager];
+        if([manager fileExistsAtPath:cachePath])
+        {
+            NSDictionary *attributes = [manager attributesOfItemAtPath:cachePath error:NULL];
+            NSDate *modifyDate = [attributes fileModificationDate];
+            if ([[modifyDate laterDate:expirationDate] isEqualToDate:expirationDate])
+            {
+                [manager removeItemAtPath:cachePath error:NULL];
+                failure();
+            }
+            else
+            {
+                NSData *data = [manager contentsAtPath:cachePath];
+                if(data)
+                {
+                    dispatch_sync(dispatch_get_main_queue(), ^{
+                        [self processImageData:data hash:hash];
+                    });
+                }
+                return;
+            }
+        }
+        failure();
+        
+    }];
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+-(void)saveImageToDisk:(NSString*)hash data:(NSData*)data finished:(DCAvatarFinished)finished
+{
+     [self.optQueue addOperationWithBlock:^(void){
+         NSString *cachePath = [[[self class] cacheDirectory] stringByAppendingFormat:@"/%@",hash];
+         NSFileManager *manager = [NSFileManager defaultManager];
+         [manager removeItemAtPath:cachePath error:NULL];
+         [data writeToFile:cachePath atomically:NO];
+         finished();
+     }];
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
++(NSString*)cacheDirectory
+{
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSString* dataPath = [[paths objectAtIndex:0] stringByAppendingPathComponent:@"DCAvatarCache"];
+    
+    if (![[NSFileManager defaultManager] fileExistsAtPath:dataPath])
+    {
+        [[NSFileManager defaultManager] createDirectoryAtPath:dataPath
+                                  withIntermediateDirectories:NO
+                                                   attributes:nil
+                                                        error:nil];
+    }
+    return dataPath;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //email methods

@@ -35,4 +35,10 @@ typedef NSImage DCImage;
  */
 -(void)avatarForValue:(NSString*)value success:(void (^)(DCImage *image))success failure:(void (^)(NSError *error))failure;
 
+/**
+ Cancel a avatar request.
+ @param value is the url, domain, email avatar request you want to cancel.
+ */
+-(void)cancelAvatar:(NSString*)value;
+
 @end
