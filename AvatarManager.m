@@ -62,6 +62,7 @@ typedef void (^DCAvatarFinished)(void);
 {
     if(self = [super init])
     {
+        self.cachedImages = [[NSCache alloc] init];
         self.maxCacheAge = kDefaultCacheMaxCacheAge;
         self.optQueue = [[NSOperationQueue alloc] init];
         self.optQueue.maxConcurrentOperationCount = 6;
@@ -208,7 +209,10 @@ typedef void (^DCAvatarFinished)(void);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(NSArray*)successBlocksForHash:(NSString*)hash
 {
-    return [self blocksForHash:hash dict:self.successBlocks];
+    [self.lock lock];
+    NSArray *array = [self blocksForHash:hash dict:self.successBlocks];
+    [self.lock unlock];
+    return array;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(NSArray*)failureBlocksForHash:(NSString*)hash
@@ -304,13 +308,13 @@ typedef void (^DCAvatarFinished)(void);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(void)saveImageToDisk:(NSString*)hash data:(NSData*)data finished:(DCAvatarFinished)finished
 {
-     [self.optQueue addOperationWithBlock:^(void){
-         NSString *cachePath = [[[self class] cacheDirectory] stringByAppendingFormat:@"/%@",hash];
-         NSFileManager *manager = [NSFileManager defaultManager];
-         [manager removeItemAtPath:cachePath error:NULL];
-         [data writeToFile:cachePath atomically:NO];
-         finished();
-     }];
+    [self.optQueue addOperationWithBlock:^(void){
+        NSString *cachePath = [[[self class] cacheDirectory] stringByAppendingFormat:@"/%@",hash];
+        NSFileManager *manager = [NSFileManager defaultManager];
+        [manager removeItemAtPath:cachePath error:NULL];
+        [data writeToFile:cachePath atomically:NO];
+        finished();
+    }];
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 +(NSString*)cacheDirectory
