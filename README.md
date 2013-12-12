@@ -35,6 +35,7 @@ Other notable features:
 * Has both iOS and OSX support.
 * gravatar support.
 * domain meta tag support.
+* supports showing a progress view.
 
 ## Install ##
 
