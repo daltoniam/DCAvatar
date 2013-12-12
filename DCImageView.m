@@ -19,9 +19,20 @@
         [manager cancelAvatar:_avatarValue];
     if(value)
     {
-        [manager avatarForValue:value success:^(DCImage *image){
-            self.image = image;
-        } failure:NULL];
+        if(self.showProgress)
+        {
+            [manager avatarForValue:value success:^(DCImage *image){
+                self.image = image;
+            }progress:^(float progress){
+                [self setProgress:progress];
+            }failure:NULL];
+        }
+        else
+        {
+            [manager avatarForValue:value success:^(DCImage *image){
+                self.image = image;
+            } failure:NULL];
+        }
     }
     _avatarValue = value;
 }
@@ -29,6 +40,11 @@
 -(void)cancelAvatar
 {
     self.avatarValue = nil;
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+-(void)setProgress:(float)progress
+{
+    //default implementation does nothing.
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 

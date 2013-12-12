@@ -23,8 +23,12 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
 @property(nonatomic,assign)AvatarOperationState state;
 @property(readwrite, nonatomic, assign, getter = isCancelled)BOOL cancelled;
 
+@property(nonatomic,assign)long long contentLength;
 @property(nonatomic,strong)DCAvatarRequestSuccess success;
 @property(nonatomic,strong)DCAvatarRequestFailure failure;
+
+@property(nonatomic)long long expectedLength;
+@property(nonatomic,strong)DCAvatarRequestProgress progress;
 
 @end
 
@@ -51,6 +55,12 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
     self.failure = failure;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+-(void)setProgressBlock:(DCAvatarRequestProgress)progress expectedLength:(long long)length
+{
+    self.progress = progress;
+    self.expectedLength = length;
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
 -(NSData*)responseData
 {
     return self.receivedData;
@@ -61,9 +71,23 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
     return self.saveURL;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+-(long long)responseLength
+{
+    return self.contentLength;
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
 - (void)connection:(NSURLConnection *)connection didReceiveData:(NSData *)data
 {
     [self.receivedData appendData:data];
+    if(self.progress && self.expectedLength > 0)
+    {        
+        float increment = 100.0f/self.expectedLength;
+        float current = (increment*self.receivedData.length);
+        current = current*0.01f;
+        if(current > 1)
+            current = 1;
+        self.progress(self,current);
+    }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 - (void)connectionDidFinishLoading:(NSURLConnection *)currentConnection
@@ -81,6 +105,12 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
 {
     [self.receivedData setLength:0];
+    if ([response isKindOfClass:[NSHTTPURLResponse self]])
+    {
+        NSHTTPURLResponse* httpResponse = (NSHTTPURLResponse*)response;
+        NSDictionary *headers = [httpResponse allHeaderFields];
+        self.contentLength = [[headers objectForKey:@"Content-Length"] longLongValue];
+    }
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 - (void)start
@@ -91,6 +121,8 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
     
     NSURL* url = [[NSURL alloc] initWithString:self.saveURL];
     NSMutableURLRequest* request = [[NSMutableURLRequest alloc] initWithURL:url cachePolicy:NSURLRequestUseProtocolCachePolicy timeoutInterval:10];
+    if(self.isHead)
+        [request setHTTPMethod:@"HEAD"];
     self.urlConnection = [[NSURLConnection alloc] initWithRequest:request delegate:self startImmediately:NO];
     
     NSPort* port = [NSPort port];

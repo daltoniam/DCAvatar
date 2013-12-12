@@ -16,10 +16,6 @@ static const NSInteger LastDiskCheckTime = 60 * 10; //10 minutes
 
 static NSString * const kDCAvatarLockName = @"com.basementkrew.networking.operation.lock";
 
-typedef void (^DCAvatarSuccess)(DCImage *image);
-
-typedef void (^DCAvatarFailure)(NSError *error);
-
 typedef void (^DCAvatarFinished)(void);
 
 @interface AvatarManager ()
@@ -41,6 +37,9 @@ typedef void (^DCAvatarFinished)(void);
 
 //block mappings on failure
 @property(nonatomic,strong)NSMutableDictionary *failureBlocks;
+
+//block mappings on progress
+@property(nonatomic,strong)NSMutableDictionary *progressBlocks;
 
 
 @end
@@ -70,6 +69,7 @@ typedef void (^DCAvatarFinished)(void);
         self.lock.name = kDCAvatarLockName;
         self.successBlocks = [NSMutableDictionary new];
         self.failureBlocks = [NSMutableDictionary new];
+        self.progressBlocks = [NSMutableDictionary new];
 #if TARGET_OS_IPHONE
         // Subscribe to memory warning, so we can clear the image cache on iOS
         [[NSNotificationCenter defaultCenter] addObserver:self
@@ -84,6 +84,11 @@ typedef void (^DCAvatarFinished)(void);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(void)avatarForValue:(NSString*)value success:(DCAvatarSuccess)success failure:(DCAvatarFailure)failure
 {
+    [self avatarForValue:value success:success progress:NULL failure:failure];
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+-(void)avatarForValue:(NSString*)value success:(DCAvatarSuccess)success progress:(DCAvatarProgess)progress failure:(DCAvatarFailure)failure
+{
     NSString *hash = [self hashValue:value];
     DCImage *image = [self.cachedImages objectForKey:hash];
     if(image)
@@ -91,22 +96,43 @@ typedef void (^DCAvatarFinished)(void);
         success(image);
         return;
     }
-    if([self addReturnBlock:success failure:failure forHash:hash])
+    if([self addReturnBlock:success progress:progress failure:failure forHash:hash])
         return;
-    
+
     [self imageFromDisk:hash success:success failure:^{
         
         NSString *url = value;
         if(isEmail(value))
             url = [self gravatarString:value];
-        
-        AvatarRequest *request = [AvatarRequest requestWithURL:url success:^(AvatarRequest *request){
-            [self processImageData:request.responseData hash:hash];
-        }failure:^(AvatarRequest *request,NSError *error){
-            [self processFailure:error hash:hash];
-        }];
-        [self.optQueue addOperation:request];
+        if(progress)
+        {
+            AvatarRequest *request = [AvatarRequest requestWithURL:url success:^(AvatarRequest *request){
+                [self sendRequest:url hash:hash progress:progress length:request.responseLength];
+            }failure:^(AvatarRequest *request,NSError *error){
+                [self processFailure:error hash:hash];
+            }];
+            request.isHead = YES;
+            [self.optQueue addOperation:request];
+        }
+        else
+            [self sendRequest:url hash:hash progress:NULL length:0];
     }];
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+-(void)sendRequest:(NSString*)url hash:(NSString*)hash progress:(DCAvatarProgess)process length:(long long)length
+{
+    AvatarRequest *request = [AvatarRequest requestWithURL:url success:^(AvatarRequest *request){
+        [self processImageData:request.responseData hash:hash];
+    }failure:^(AvatarRequest *request,NSError *error){
+        [self processFailure:error hash:hash];
+    }];
+    if(process)
+    {
+        [request setProgressBlock:^(AvatarRequest *request,float progress){
+            [self processProgress:progress hash:hash];
+        }expectedLength:length];
+    }
+    [self.optQueue addOperation:request];
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(void)cancelAvatar:(NSString*)value
@@ -178,6 +204,13 @@ typedef void (^DCAvatarFinished)(void);
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+-(void)processProgress:(float)progress hash:(NSString*)hash
+{
+    NSArray *progressArray = [self progressBlocksForHash:hash];
+    for(DCAvatarProgess progressBlock in progressArray)
+        progressBlock(progress);
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
 -(void)processFailure:(NSError*)error hash:(NSString*)hash
 {
     NSArray *failureArray = [self failureBlocksForHash:hash];
@@ -185,11 +218,12 @@ typedef void (^DCAvatarFinished)(void);
         failure(error);
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
--(BOOL)addReturnBlock:(DCAvatarSuccess)success failure:(DCAvatarFailure)failure forHash:(NSString*)hash
+-(BOOL)addReturnBlock:(DCAvatarSuccess)success progress:(DCAvatarProgess)progress failure:(DCAvatarFailure)failure forHash:(NSString*)hash
 {
     [self.lock lock];
     NSMutableArray *successArray = self.successBlocks[hash];
     NSMutableArray *failureArray = self.failureBlocks[hash];
+    NSMutableArray *progressArray = self.progressBlocks[hash];
     BOOL running = YES;
     if(!successArray)
     {
@@ -199,20 +233,29 @@ typedef void (^DCAvatarFinished)(void);
         self.failureBlocks[hash] = failureArray;
         running = NO;
     }
+    if(!progressArray && progress)
+    {
+        progressArray = [NSMutableArray new];
+        self.progressBlocks[hash] = progressArray;
+    }
     if(success)
         [successArray addObject:success];
     if(failure)
         [failureArray addObject:failure];
+    if(progress)
+        [progressArray addObject:progress];
     [self.lock unlock];
     return running;
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(NSArray*)successBlocksForHash:(NSString*)hash
 {
-    [self.lock lock];
-    NSArray *array = [self blocksForHash:hash dict:self.successBlocks];
-    [self.lock unlock];
-    return array;
+    return [self blocksForHash:hash dict:self.successBlocks];
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+-(NSArray*)progressBlocksForHash:(NSString*)hash
+{
+    return [self blocksForHash:hash dict:self.progressBlocks];
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(NSArray*)failureBlocksForHash:(NSString*)hash

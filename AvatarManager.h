@@ -20,6 +20,12 @@ typedef UIImage DCImage;
 typedef NSImage DCImage;
 #endif
 
+typedef void (^DCAvatarSuccess)(DCImage *image);
+
+typedef void (^DCAvatarFailure)(NSError *error);
+
+typedef void (^DCAvatarProgess)(float progress);
+
 /**
  This is how long a cache image should exist on disk. Default is 24 hours.
  */
@@ -33,12 +39,22 @@ typedef NSImage DCImage;
 +(AvatarManager*)manager;
 
 /**
+ Fetchs the avatar for the value. It is important that using this method will cause a HEAD request to be sent for every image url.
+ This is not ideal for very small images and should only be used for large images that load slowly or images that need a progress view.
+ @param value is the url, domain, or email(gravatar) to use to get the avatar for.
+ @param success block returns an the image on success
+ @param progress block returns the progress of the request. This would be between 0.0 and 1.0.
+ @param failure block returns an error on failure.
+ */
+-(void)avatarForValue:(NSString*)value success:(DCAvatarSuccess)success progress:(DCAvatarProgess)progress failure:(DCAvatarFailure)failure;
+
+/**
  Fetchs the avatar for the value.
  @param value is the url, domain, or email(gravatar) to use to get the avatar for.
  @param success block returns an the image on success
  @param failure block returns an error on failure.
  */
--(void)avatarForValue:(NSString*)value success:(void (^)(DCImage *image))success failure:(void (^)(NSError *error))failure;
+-(void)avatarForValue:(NSString*)value success:(DCAvatarSuccess)success failure:(DCAvatarFailure)failure;
 
 /**
  Cancel a avatar request.

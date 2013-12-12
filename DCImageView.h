@@ -23,4 +23,16 @@
  */
 -(void)cancelAvatar;
 
+/**
+ This is provided so your subclass can be notified of progress.
+ Default is NO. Set it to YES in your subclass if you want to show a progress view.
+ */
+@property(nonatomic,assign)BOOL showProgress;
+
+/**
+ This method does nothing by default. It is provided so your subclass can use it.
+ @param progress is the progress of the image. It will be between 0.0 and 1.0.
+ */
+-(void)setProgress:(float)progress;
+
 @end
