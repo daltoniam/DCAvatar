@@ -94,12 +94,14 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
 {
     if(self.success)
         self.success(self);
+    [self finish];
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 - (void)connection:(NSURLConnection *)currentConnection didFailWithError:(NSError *)error
 {
     if(self.failure)
         self.failure(self,error);
+    [self finish];
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 - (void)connection:(NSURLConnection *)connection didReceiveResponse:(NSURLResponse *)response
