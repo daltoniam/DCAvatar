@@ -89,6 +89,11 @@ typedef void (^DCAvatarFinished)(void);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(void)avatarForValue:(NSString*)value success:(DCAvatarSuccess)success progress:(DCAvatarProgess)progress failure:(DCAvatarFailure)failure
 {
+    [self avatarForValue:value size:0 success:success progress:progress failure:failure];
+}
+////////////////////////////////////////////////////////////////////////////////////////////////////
+-(void)avatarForValue:(NSString*)value size:(long long)size success:(DCAvatarSuccess)success progress:(DCAvatarProgess)progress failure:(DCAvatarFailure)failure
+{
     NSString *hash = [self hashValue:value];
     DCImage *image = [self.cachedImages objectForKey:hash];
     if(image)
@@ -106,13 +111,18 @@ typedef void (^DCAvatarFinished)(void);
             url = [self gravatarString:value];
         if(progress)
         {
-            AvatarRequest *request = [AvatarRequest requestWithURL:url success:^(AvatarRequest *request){
-                [self sendRequest:url hash:hash progress:progress length:request.responseLength];
-            }failure:^(AvatarRequest *request,NSError *error){
-                [self processFailure:error hash:hash];
-            }];
-            request.isHead = YES;
-            [self.optQueue addOperation:request];
+            if(size > 0)
+                [self sendRequest:url hash:hash progress:progress length:size];
+            else
+            {
+                AvatarRequest *request = [AvatarRequest requestWithURL:url success:^(AvatarRequest *request){
+                    [self sendRequest:url hash:hash progress:progress length:request.responseLength];
+                }failure:^(AvatarRequest *request,NSError *error){
+                    [self processFailure:error hash:hash];
+                }];
+                request.isHead = YES;
+                [self.optQueue addOperation:request];
+            }
         }
         else
             [self sendRequest:url hash:hash progress:NULL length:0];
