@@ -103,7 +103,7 @@ typedef void (^DCAvatarFinished)(void);
     }
     if([self addReturnBlock:success progress:progress failure:failure forHash:hash])
         return;
-
+    
     [self imageFromDisk:hash success:success failure:^{
         
         NSString *url = value;
@@ -201,7 +201,8 @@ typedef void (^DCAvatarFinished)(void);
         NSArray *successArray = [self successBlocksForHash:hash];
         for(DCAvatarSuccess success in successArray)
             success(image);
-        [self.cachedImages setObject:image forKey:hash];
+        if(image)
+            [self.cachedImages setObject:image forKey:hash];
         [self removeBlocksForHash:hash];
         [self saveImageToDisk:hash data:data finished:^{
             
@@ -347,7 +348,7 @@ typedef void (^DCAvatarFinished)(void);
                 NSData *data = [manager contentsAtPath:cachePath];
                 if(data)
                 {
-                    dispatch_sync(dispatch_get_main_queue(), ^{
+                    dispatch_async(dispatch_get_main_queue(), ^{
                         [self processImageData:data hash:hash];
                     });
                 }
