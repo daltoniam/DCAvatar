@@ -101,6 +101,16 @@ typedef void (^DCAvatarFinished)(void);
         success(image);
         return;
     }
+    //might be a fileUrl
+    if([value hasPrefix:@"/"]) {
+        DCImage *image = [[DCImage alloc] initWithContentsOfFile:value];
+        if(image) {
+            [self.cachedImages setObject:image forKey:hash];
+            success(image);
+            return;
+        }
+        
+    }
     if([self addReturnBlock:success progress:progress failure:failure forHash:hash])
         return;
     

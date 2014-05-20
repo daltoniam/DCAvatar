@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name         = "DCAvatar"
-  s.version      = "0.1.0"
+  s.version      = "0.1.1"
   s.summary      = "A simple, asynchronous, network based avatar library for iOS and OSX"
   s.homepage     = "https://github.com/daltoniam/DCAvatar"
   s.license      = 'Apache License, Version 2.0'
