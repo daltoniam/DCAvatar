@@ -130,13 +130,6 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
     if(self.isHead)
         [request setHTTPMethod:@"HEAD"];
     self.urlConnection = [[NSURLConnection alloc] initWithRequest:request delegate:self startImmediately:YES];
-    
-    //    NSPort* port = [NSPort port];
-    //    NSRunLoop* runLoop = [NSRunLoop currentRunLoop]; // Get the main runloop
-    //    [runLoop addPort:port forMode:NSDefaultRunLoopMode];
-    //    [self.urlConnection scheduleInRunLoop:runLoop forMode:NSDefaultRunLoopMode];
-    //    [self.urlConnection start];
-    //    [runLoop run];
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 - (void)finish
