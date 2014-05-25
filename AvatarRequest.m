@@ -117,6 +117,10 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 - (void)start
 {
+    if(![NSThread isMainThread]) {
+        [self performSelectorOnMainThread:@selector(start) withObject:nil waitUntilDone:NO];
+        return;
+    }
     [self willChangeValueForKey:@"isExecuting"];
     self.state = AvatarOperationExecutingState;
     [self didChangeValueForKey:@"isExecuting"];
@@ -125,14 +129,14 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
     NSMutableURLRequest* request = [[NSMutableURLRequest alloc] initWithURL:url cachePolicy:NSURLRequestUseProtocolCachePolicy timeoutInterval:10];
     if(self.isHead)
         [request setHTTPMethod:@"HEAD"];
-    self.urlConnection = [[NSURLConnection alloc] initWithRequest:request delegate:self startImmediately:NO];
+    self.urlConnection = [[NSURLConnection alloc] initWithRequest:request delegate:self startImmediately:YES];
     
-    NSPort* port = [NSPort port];
-    NSRunLoop* runLoop = [NSRunLoop currentRunLoop]; // Get the main runloop
-    [runLoop addPort:port forMode:NSDefaultRunLoopMode];
-    [self.urlConnection scheduleInRunLoop:runLoop forMode:NSDefaultRunLoopMode];
-    [self.urlConnection start];
-    [runLoop run];
+    //    NSPort* port = [NSPort port];
+    //    NSRunLoop* runLoop = [NSRunLoop currentRunLoop]; // Get the main runloop
+    //    [runLoop addPort:port forMode:NSDefaultRunLoopMode];
+    //    [self.urlConnection scheduleInRunLoop:runLoop forMode:NSDefaultRunLoopMode];
+    //    [self.urlConnection start];
+    //    [runLoop run];
 }
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////
 - (void)finish
