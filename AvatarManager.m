@@ -211,17 +211,18 @@ typedef void (^DCAvatarFinished)(void);
         NSArray *successArray = [self successBlocksForHash:hash];
         for(DCAvatarSuccess success in successArray)
             success(image);
-        if(image)
-            [self.cachedImages setObject:image forKey:hash];
         [self removeBlocksForHash:hash];
-        [self saveImageToDisk:hash data:data finished:^{
-            
-            if(self.optQueue.operations.count <= 1)
-            {
-                if(!self.lastDiskCheck || [self.lastDiskCheck timeIntervalSinceNow] > LastDiskCheckTime)
-                    [self cleanDisk];
-            }
-        }];
+        if(image) {
+            [self.cachedImages setObject:image forKey:hash];
+            [self saveImageToDisk:hash data:data finished:^{
+                
+                if(self.optQueue.operations.count <= 1)
+                {
+                    if(!self.lastDiskCheck || [self.lastDiskCheck timeIntervalSinceNow] > LastDiskCheckTime)
+                        [self cleanDisk];
+                }
+            }];
+        }
     }
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -237,6 +238,7 @@ typedef void (^DCAvatarFinished)(void);
     NSArray *failureArray = [self failureBlocksForHash:hash];
     for(DCAvatarFailure failure in failureArray)
         failure(error);
+    [self removeBlocksForHash:hash];
 }
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(BOOL)addReturnBlock:(DCAvatarSuccess)success progress:(DCAvatarProgess)progress failure:(DCAvatarFailure)failure forHash:(NSString*)hash
@@ -327,8 +329,9 @@ typedef void (^DCAvatarFinished)(void);
                 continue;
             
             NSDate *modifyDate = resourceValues[NSURLContentModificationDateKey];
-            if ([[modifyDate laterDate:expirationDate] isEqualToDate:expirationDate])
+            if ([[modifyDate laterDate:expirationDate] isEqualToDate:expirationDate]) {
                 [manager removeItemAtURL:fileURL error:NULL];
+            }
         }
     }];
 }
