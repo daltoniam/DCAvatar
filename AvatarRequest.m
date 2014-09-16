@@ -17,6 +17,7 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
 
 @interface AvatarRequest ()
 
+@property (readwrite, nonatomic, assign, getter = isCancelled) BOOL cancelled;
 @property(nonatomic,strong)NSString *saveURL;
 @property(nonatomic,strong)NSMutableData *receivedData;
 @property(nonatomic,strong)NSURLConnection *urlConnection;
