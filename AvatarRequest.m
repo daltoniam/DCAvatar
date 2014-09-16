@@ -21,7 +21,6 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
 @property(nonatomic,strong)NSMutableData *receivedData;
 @property(nonatomic,strong)NSURLConnection *urlConnection;
 @property(nonatomic,assign)AvatarOperationState state;
-@property(readwrite, nonatomic, assign, getter = isCancelled)BOOL cancelled;
 
 @property(nonatomic,assign)long long contentLength;
 @property(nonatomic,strong)DCAvatarRequestSuccess success;
@@ -34,6 +33,7 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
 
 @implementation AvatarRequest
 
+@synthesize cancelled = _cancelled;
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(instancetype)initWithURL:(NSString*)url
 {
@@ -80,7 +80,7 @@ typedef NS_ENUM(NSInteger, AvatarOperationState) {
 {
     [self.receivedData appendData:data];
     if(self.progress && self.expectedLength > 0)
-    {        
+    {
         float increment = 100.0f/self.expectedLength;
         float current = (increment*self.receivedData.length);
         current = current*0.01f;
