@@ -94,6 +94,9 @@ typedef void (^DCAvatarFinished)(void);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(void)avatarForValue:(NSString*)value size:(long long)size success:(DCAvatarSuccess)success progress:(DCAvatarProgess)progress failure:(DCAvatarFailure)failure
 {
+    if(value.length == 0) {
+        return;
+    }
     NSString *hash = [self hashValue:value];
     DCImage *image = [self.cachedImages objectForKey:hash];
     if(image)
@@ -157,6 +160,9 @@ typedef void (^DCAvatarFinished)(void);
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 -(void)cancelAvatar:(NSString*)value
 {
+    if(value.length == 0) {
+        return;
+    }
     if(value)
         [self removeBlocksForHash:[self hashValue:value]];
 }
